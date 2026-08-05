@@ -1,0 +1,12 @@
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.pytest_cache/
+*.pyc
+
+# Node (deliverable build scripts)
+deliverables/build/node_modules/
+
+# OS
+.DS_Store

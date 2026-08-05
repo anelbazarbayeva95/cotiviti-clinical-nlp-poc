@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clinical Note Structuring POC</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --page-plane: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --border: rgba(11, 11, 11, 0.1);
+    --series-1: #2a78d6;
+    --series-3: #1baf7a;
+    --status-warning: #fab219;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --page-plane: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --border: rgba(255, 255, 255, 0.1);
+      --series-1: #3987e5;
+      --series-3: #199e70;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page-plane);
+    color: var(--text-primary);
+  }
+  .app { max-width: 900px; margin: 0 auto; padding: 24px 20px 64px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); margin: 0 0 16px; }
+  .disclaimer {
+    font-size: 0.8rem; color: var(--text-muted); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; margin-bottom: 20px; background: var(--surface-1);
+  }
+  .panel {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; margin-bottom: 20px;
+  }
+  .panel h2 { font-size: 1.05rem; margin: 0 0 6px; }
+  .panel .stage-note { font-size: 0.8rem; color: var(--text-muted); margin: 0 0 14px; }
+  textarea {
+    width: 100%; min-height: 160px; font: inherit; padding: 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--page-plane); color: var(--text-primary);
+    resize: vertical;
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+  button {
+    font: inherit; border: none; border-radius: 8px; padding: 9px 16px; cursor: pointer;
+    background: var(--series-1); color: #fff;
+  }
+  button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text-primary); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  input[type="file"] { font: inherit; color: var(--text-secondary); }
+  select {
+    font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--page-plane); color: var(--text-primary);
+  }
+  .status { font-size: 0.85rem; color: var(--text-muted); margin-top: 8px; }
+  .error { color: #d03b3b; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 8px; }
+  .card { border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .card h3 { margin: 0 0 8px; font-size: 0.9rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; }
+  .card ul { margin: 0; padding-left: 18px; }
+  .card p { margin: 0; }
+  .badge { display: inline-block; font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--series-3) 18%, transparent); color: var(--series-3); margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Clinical Note Structuring POC</h1>
+  <p class="subtitle">OCR + Claude extraction pipeline, built for the Cotiviti GenAI Research Engineer Intern assessment (Topic 1: Clinical NLP/LLM).</p>
+  <div class="disclaimer">
+    All notes on this page are synthetic and fictional, generated for demo purposes only. No real patient data (PHI) is used anywhere in this project.
+  </div>
+
+  <div class="panel">
+    <h2>Stage 1 — OCR</h2>
+    <p class="stage-note">Simulates a scanned/faxed clinical note arriving with no structure at all — the historical starting point for clinical NLP.</p>
+    <div class="row">
+      <select id="sample-image-select">
+        <option value="">— choose a sample scanned note —</option>
+        <option value="sample_data/scanned_note_1.png">Scanned note 1 (annual physical)</option>
+        <option value="sample_data/scanned_note_2.png">Scanned note 2 (ER visit)</option>
+      </select>
+      <button id="run-ocr-btn">Run OCR</button>
+    </div>
+    <p class="status" id="ocr-status"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Stage 2 — LLM Structuring</h2>
+    <p class="stage-note">Claude reads the raw note text (from OCR above, or pasted directly) and returns structured fields via a forced tool call — no regex, no hand-built NER pipeline.</p>
+    <textarea id="note-text" placeholder="Paste clinical note text here, or run OCR above to populate it."></textarea>
+    <div class="row">
+      <button id="extract-btn">Extract Structured Data</button>
+      <button class="secondary" id="load-sample-text-btn">Load sample note text</button>
+    </div>
+    <p class="status" id="extract-status"></p>
+  </div>
+
+  <div class="panel" id="results-panel" style="display:none">
+    <h2>Structured Output</h2>
+    <span class="badge" id="model-badge"></span>
+    <div class="cards">
+      <div class="card"><h3>Chief Complaint</h3><p id="out-chief-complaint"></p></div>
+      <div class="card"><h3>Diagnoses</h3><ul id="out-diagnoses"></ul></div>
+      <div class="card"><h3>Medications</h3><ul id="out-medications"></ul></div>
+      <div class="card"><h3>Procedures</h3><ul id="out-procedures"></ul></div>
+      <div class="card"><h3>Follow-up</h3><ul id="out-followup"></ul></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = "";
+
+const sampleTexts = {
+  default: `Patient: Morgan Rivera (fictional/synthetic)
+DOB: 1975-09-02 (synthetic)
+Visit type: Diabetes follow-up
+
+Chief complaint: Follow-up for type 2 diabetes mellitus management, patient reports occasional fatigue.
+
+Assessment: Type 2 diabetes mellitus, moderately controlled. Mild peripheral neuropathy, stable.
+
+Plan / Medications: Continue metformin 1000mg twice daily. Continue gabapentin 300mg at bedtime for neuropathy symptoms.
+
+Procedures performed: HbA1c blood draw, foot exam for neuropathy screening.
+
+Follow-up: Return in 3 months for HbA1c recheck. Refer to ophthalmology for annual diabetic eye exam.`,
+};
+
+async function runOcr() {
+  const select = document.getElementById("sample-image-select");
+  const status = document.getElementById("ocr-status");
+  if (!select.value) {
+    status.textContent = "Pick a sample scanned note first.";
+    status.className = "status error";
+    return;
+  }
+  status.textContent = "Running OCR…";
+  status.className = "status";
+  try {
+    const imageResp = await fetch(select.value);
+    const blob = await imageResp.blob();
+    const formData = new FormData();
+    formData.append("file", blob, "scan.png");
+    const resp = await fetch(`${API_BASE}/api/ocr`, { method: "POST", body: formData });
+    if (!resp.ok) throw new Error((await resp.json()).detail || `HTTP ${resp.status}`);
+    const data = await resp.json();
+    document.getElementById("note-text").value = data.extracted_text;
+    status.textContent = `OCR complete — ${data.extracted_text.length} characters extracted.`;
+  } catch (err) {
+    status.textContent = `Error: ${err.message}`;
+    status.className = "status error";
+  }
+}
+
+async function runExtract() {
+  const noteText = document.getElementById("note-text").value;
+  const status = document.getElementById("extract-status");
+  const resultsPanel = document.getElementById("results-panel");
+  if (!noteText.trim()) {
+    status.textContent = "Paste or OCR a note first.";
+    status.className = "status error";
+    return;
+  }
+  status.textContent = "Calling Claude…";
+  status.className = "status";
+  try {
+    const resp = await fetch(`${API_BASE}/api/extract`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note_text: noteText }),
+    });
+    if (!resp.ok) throw new Error((await resp.json()).detail || `HTTP ${resp.status}`);
+    const data = await resp.json();
+    renderResults(data);
+    status.textContent = "Extraction complete.";
+  } catch (err) {
+    status.textContent = `Error: ${err.message}`;
+    status.className = "status error";
+  }
+}
+
+function renderResults(data) {
+  const s = data.structured;
+  document.getElementById("model-badge").textContent = data.model_used;
+  document.getElementById("out-chief-complaint").textContent = s.chief_complaint || "—";
+  fillList("out-diagnoses", s.diagnoses.map((d) => d.name + (d.icd10_hint ? ` (${d.icd10_hint})` : "")));
+  fillList("out-medications", s.medications.map((m) => [m.name, m.dosage, m.frequency].filter(Boolean).join(" — ")));
+  fillList("out-procedures", s.procedures);
+  fillList("out-followup", s.follow_up);
+  document.getElementById("results-panel").style.display = "block";
+}
+
+function fillList(id, items) {
+  const el = document.getElementById(id);
+  el.innerHTML = "";
+  if (!items.length) {
+    el.innerHTML = "<li>—</li>";
+    return;
+  }
+  for (const item of items) {
+    const li = document.createElement("li");
+    li.textContent = item;
+    el.appendChild(li);
+  }
+}
+
+document.getElementById("run-ocr-btn").addEventListener("click", runOcr);
+document.getElementById("extract-btn").addEventListener("click", runExtract);
+document.getElementById("load-sample-text-btn").addEventListener("click", () => {
+  document.getElementById("note-text").value = sampleTexts.default;
+});
+</script>
+</body>
+</html>
